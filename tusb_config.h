@@ -37,6 +37,9 @@
 #define CFG_TUSB_MCU OPT_MCU_CH32V20X
 #define BOARD ch32v203c_r0_1v0
 
+#define CFG_TUD_WCH_USBIP_FSDEV 1
+#define CFG_TUD_WCH_USBIP_USBFS 0
+
 // RHPort number used for device can be defined by board.mk, default to port 0
 #ifndef BOARD_TUD_RHPORT
 #define BOARD_TUD_RHPORT      0

@@ -122,6 +122,7 @@ void put_hex(uint8_t val) {
 #endif
 }
 
+#ifdef USE_PRINTS
 void dump_rom(uint32_t addr, uint32_t size) {
     _PUTS("Memory dump:");
     const uint8_t* ptr = (const uint8_t*)addr;
@@ -143,9 +144,22 @@ void dump_rom(uint32_t addr, uint32_t size) {
     }
     _PUTS("");
 }
+#else
+void dump_rom(uint32_t addr, uint32_t size) {
+  // NOP
+}
+#endif
 
 bool enter_application(void) {
-  BKP_WriteBackupRegister(BKP_DR10, BOOT_MAGIC_APP_IMMEDIATELY);
+
+  const uint32_t* ptr = (const uint32_t*)0x00004000;
+  if (*ptr == 0xe339e339UL) {
+    // It seems that the flash is not programed.
+    // _PUTS("Not programmed.");
+    return false;
+  }
+
+    BKP_WriteBackupRegister(BKP_DR10, BOOT_MAGIC_APP_IMMEDIATELY);
   NVIC_SystemReset();
 
   while (1) {}
@@ -225,6 +239,7 @@ bool enter_application(void) {
   while (1) { }
 }
 
+void led_task(void);
 
 /*------------- MAIN -------------*/
 int main(void)
@@ -237,7 +252,7 @@ int main(void)
   PWR_BackupAccessCmd(ENABLE);
   uint16_t magic = BKP_ReadBackupRegister(BKP_DR10);
   if (magic == BOOT_MAGIC_APP_IMMEDIATELY) {
-    // _PUTS("BOOT_MAGIC_APP");
+    _PUTS("BOOT_MAGIC_APP");
     enter_application();
   }
 
@@ -298,8 +313,6 @@ int main(void)
   // For Flash operation, EnhanceRead mode should be disabled.
   FLASH_Enhance_Mode(DISABLE);
 
-  // board_init();
-
   // init device stack on configured roothub port
   tusb_rhport_init_t dev_init = {
     .role = TUSB_ROLE_DEVICE,
@@ -311,7 +324,21 @@ int main(void)
 
   while (1)
   {
+    led_task();
+
     tud_task(); // tinyusb device task
+  }
+}
+
+void led_task(void) {
+  static uint32_t timer = 0;
+  static bool led_on = false;
+  const uint32_t interval = 500;
+  uint32_t now = board_millis();
+  if (now - timer >= interval) {
+    timer = now;
+    led_on = !led_on;
+    GPIO_WriteBit(GPIOA, GPIO_Pin_5, led_on ? Bit_SET : Bit_RESET);
   }
 }
 

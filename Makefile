@@ -32,9 +32,8 @@ TUSB_SRCS=tinyusb/src/class/hid/hid_device.c \
 		  tinyusb/src/common/tusb_fifo.c \
 		  tinyusb/src/device/usbd.c \
 		  tinyusb/src/device/usbd_control.c \
+		  tinyusb/src/portable/st/stm32_fsdev/fsdev_common.c \
 		  tinyusb/src/portable/st/stm32_fsdev/dcd_stm32_fsdev.c \
-		  tinyusb/src/portable/synopsys/dwc2/dcd_dwc2.c \
-		  tinyusb/src/portable/synopsys/dwc2/dwc2_common.c \
 		  tinyusb/src/portable/wch/dcd_ch32_usbfs.c \
 		  tinyusb/src/portable/wch/dcd_ch32_usbhs.c \
 		  tinyusb/src/tusb.c
