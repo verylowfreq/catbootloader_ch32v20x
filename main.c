@@ -373,6 +373,187 @@ void tud_resume_cb(void)
   
 }
 
+
+static uint8_t response_buffer[64];
+
+/// @brief Execute incoming command
+/// @param buffer 64-bytes buffer
+/// @return pointer to 64-bytes buffer (Need to be sent) or NULL (Nothing to send)
+const uint8_t* execute_command(const uint8_t* buffer) {
+
+  CommandPacket_t const* packet = (CommandPacket_t const*)buffer;
+  memset(response_buffer, 0x00, sizeof(response_buffer));
+
+  if (packet->command == CMD_NOP) {
+    response_buffer[0] = RESP_OK;
+    return response_buffer;
+
+  } else if (packet->command == CMD_IDENT) {
+    response_buffer[0] = RESP_OK;
+    const char* text = "WCH CH32V203C8T6";
+    response_buffer[1] = strlen(text);
+    memcpy(&response_buffer[2], text, strlen(text));
+    return response_buffer;
+
+  } else if (packet->command == CMD_ERASE) {
+    const uint32_t PAGE_SIZE = 256;
+    uint32_t const address = packet->param1;
+    uint32_t const size = packet->param2;
+
+    if (address % PAGE_SIZE == 0 && size % PAGE_SIZE == 0) {
+      uint32_t const page_count = size / PAGE_SIZE;
+
+      FLASH_Unlock_Fast();
+      FLASH_ClearFlag(FLASH_FLAG_BSY | FLASH_FLAG_EOP |FLASH_FLAG_WRPRTERR);
+      for (uint32_t i = 0; i < page_count; i++) {
+        uint32_t const start_address = address + i * PAGE_SIZE;
+        FLASH_ErasePage_Fast(start_address);
+      }
+      FLASH_Lock_Fast();
+    }
+
+    response_buffer[0] = RESP_OK;
+    return response_buffer;
+
+  } else if (packet->command == CMD_PROGRAM_START || packet->command == CMD_PROGRAM_APPEND) {
+    const uint32_t address = packet->param1;
+    const uint32_t datalen = packet->param2;
+
+    if (packet->command == CMD_PROGRAM_START) {
+      program_address = address;
+      program_length = 0;
+      memset(program_buffer, 0xff, sizeof(program_buffer));
+    }
+
+    const uint32_t offset = address - program_address;
+
+    if (offset + datalen <= sizeof(program_buffer)) {
+      memcpy(&program_buffer[offset], packet->data, datalen);
+    }
+
+    program_length = offset + datalen;
+
+    return NULL;
+
+  } else if (packet->command == CMD_FLUSH) {
+    FLASH_Unlock_Fast();
+    FLASH_ClearFlag(FLASH_FLAG_BSY | FLASH_FLAG_EOP |FLASH_FLAG_WRPRTERR);
+
+    uint32_t addr = program_address;
+    uint32_t* data = (uint32_t*)(void*)program_buffer;
+    for (uint32_t i = 0; i < program_length;) {
+      FLASH_ProgramPage_Fast(addr + i, (uint32_t*)data);
+      data += 256 / 4;
+      i += 256;
+    }
+    FLASH_Lock_Fast();
+
+    program_address = 0;
+    program_length = 0;
+
+    response_buffer[0] = RESP_OK;
+    return response_buffer;
+
+  } else if (packet->command == CMD_READ) {
+    uint32_t address = packet->param1;
+    uint32_t size = packet->param2;
+    if (size > 62) { size = 62; }
+    response_buffer[0] = RESP_OK;
+    response_buffer[1] = size;
+    for (uint32_t i = 0; i < size; i++) {
+      uint32_t addr = address + i;
+      response_buffer[2 + i] = *((uint8_t*)addr);
+    }
+
+    return response_buffer;
+
+  } else if (packet->command == CMD_RESET) {
+    NVIC_SystemReset();
+    while (1) { }
+
+  } else if (packet->command == CMD_CRC) {
+    uint32_t const address = packet->param1;
+    uint32_t const length = packet->param2;
+    uint16_t const crc16val = crc16_ccitt((uint8_t const*)address, length);
+
+    response_buffer[0] = RESP_OK;
+    response_buffer[1] = 2;
+    response_buffer[2] = crc16val;
+    response_buffer[3] = crc16val >> 8;
+    return response_buffer;
+
+  } else {
+    response_buffer[0] = RESP_NG;
+    return response_buffer;
+  }
+}
+
+//--------------------------------------------------------------------+
+// USB Vendor class
+//--------------------------------------------------------------------+
+
+extern uint8_t const desc_ms_os_20[];
+
+enum
+{
+  VENDOR_REQUEST_WEBUSB = 1,
+  VENDOR_REQUEST_MICROSOFT = 2
+};
+
+// Invoked when a control transfer occurred on an interface of this class
+// Driver response accordingly to the request and the transfer stage (setup/data/ack)
+// return false to stall control endpoint (e.g unsupported request)
+bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request) {
+  // nothing to with DATA & ACK stage
+  if (stage != CONTROL_STAGE_SETUP) {
+    return true;
+  }
+
+  switch (request->bmRequestType_bit.type) {
+    case TUSB_REQ_TYPE_VENDOR:
+      switch (request->bRequest) {
+        case VENDOR_REQUEST_MICROSOFT:
+          if (request->wIndex == 7) {
+            // Get Microsoft OS 2.0 compatible descriptor
+            uint16_t total_len;
+            memcpy(&total_len, desc_ms_os_20 + 8, 2);
+
+            return tud_control_xfer(rhport, request, (void*)(uintptr_t)desc_ms_os_20, total_len);
+          } else {
+            return false;
+          }
+
+        default: break;
+      }
+      break;
+
+    default: break;
+  }
+
+  // stall unknown request
+  return false;
+}
+
+
+void tud_vendor_rx_cb(uint8_t idx, const uint8_t *buffer, uint32_t bufsize) {
+  (void)idx;
+  (void)buffer;
+  (void)bufsize;
+
+  while (tud_vendor_available() < 64) {
+    tud_task();
+  }
+
+  uint8_t buf[64];
+  tud_vendor_read(buf, 64);
+
+  const uint8_t* response_data = execute_command(buf);
+  if (response_data != NULL) {
+    tud_vendor_write(response_data, 64);
+    tud_vendor_flush();
+  }
+}
+
 //--------------------------------------------------------------------+
 // USB HID
 //--------------------------------------------------------------------+
@@ -402,112 +583,8 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
   (void) buffer;
   (void) bufsize;
 
-  CommandPacket_t const* packet = (CommandPacket_t const*)buffer;
-
-  if (packet->command == CMD_NOP) {
-    uint8_t report[64] = {};
-    report[0] = RESP_OK;
-    tud_hid_report(0x00, report, 64);
-
-  } else if (packet->command == CMD_IDENT) {
-    uint8_t report[64] = {};
-    report[0] = RESP_OK;
-    const char* text = "WCH CH32V203C8T6";
-    report[1] = strlen(text);
-    memcpy(&report[2], text, strlen(text));
-    tud_hid_report(0x00, report, 64);
-
-  } else if (packet->command == CMD_ERASE) {
-    const uint32_t PAGE_SIZE = 256;
-    uint32_t const address = packet->param1;
-    uint32_t const size = packet->param2;
-
-    if (address % PAGE_SIZE == 0 && size % PAGE_SIZE == 0) {
-      uint32_t const page_count = size / PAGE_SIZE;
-
-      FLASH_Unlock_Fast();
-      FLASH_ClearFlag(FLASH_FLAG_BSY | FLASH_FLAG_EOP |FLASH_FLAG_WRPRTERR);
-      for (uint32_t i = 0; i < page_count; i++) {
-        uint32_t const start_address = address + i * PAGE_SIZE;
-        FLASH_ErasePage_Fast(start_address);
-      }
-      FLASH_Lock_Fast();
-    }
-
-    uint8_t report[64] = {};
-    report[0] = RESP_OK;
-    tud_hid_report(0x00, report, 64);
-
-  } else if (packet->command == CMD_PROGRAM_START || packet->command == CMD_PROGRAM_APPEND) {
-    const uint32_t address = packet->param1;
-    const uint32_t datalen = packet->param2;
-
-    if (packet->command == CMD_PROGRAM_START) {
-      program_address = address;
-      program_length = 0;
-      memset(program_buffer, 0xff, sizeof(program_buffer));
-    }
-
-    const uint32_t offset = address - program_address;
-
-    if (offset + datalen <= sizeof(program_buffer)) {
-      memcpy(&program_buffer[offset], packet->data, datalen);
-    }
-
-    program_length = offset + datalen;
-
-  } else if (packet->command == CMD_FLUSH) {
-    FLASH_Unlock_Fast();
-    FLASH_ClearFlag(FLASH_FLAG_BSY | FLASH_FLAG_EOP |FLASH_FLAG_WRPRTERR);
-
-    uint32_t addr = program_address;
-    uint32_t* data = (uint32_t*)(void*)program_buffer;
-    for (uint32_t i = 0; i < program_length;) {
-      FLASH_ProgramPage_Fast(addr + i, (uint32_t*)data);
-      data += 256 / 4;
-      i += 256;
-    }
-    FLASH_Lock_Fast();
-
-    program_address = 0;
-    program_length = 0;
-
-    uint8_t report[64] = {};
-    report[0] = RESP_OK;
-    tud_hid_report(0x00, report, 64);
-
-  } else if (packet->command == CMD_READ) {
-    uint32_t address = packet->param1;
-    uint32_t size = packet->param2;
-    if (size > 62) { size = 62; }
-    uint8_t report[64] = {};
-    report[0] = RESP_OK;
-    report[1] = size;
-    for (uint32_t i = 0; i < size; i++) {
-      uint32_t addr = address + i;
-      report[2 + i] = *((uint8_t*)addr);
-    }
-
-    tud_hid_report(0x00, report, 64);
-
-  } else if (packet->command == CMD_RESET) {
-    NVIC_SystemReset();
-
-  } else if (packet->command == CMD_CRC) {
-    uint32_t const address = packet->param1;
-    uint32_t const length = packet->param2;
-    uint16_t const crc16val = crc16_ccitt((uint8_t const*)address, length);
-
-    uint8_t report[64] = {};
-    report[0] = RESP_OK;
-    report[1] = 2;
-    report[2] = crc16val;
-    report[3] = crc16val >> 8;
-    tud_hid_report(0x00, report, 64);
-
-  } else {
-    uint8_t report[64] = {};
-    report[0] = RESP_NG;
-    tud_hid_report(0x00, report, 64);
+  const uint8_t* response_data = execute_command(buffer);
+  if (response_data != NULL) {
+    tud_hid_report(0x00, response_data, 64);
   }
 }
