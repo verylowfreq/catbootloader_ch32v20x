@@ -331,15 +331,42 @@ int main(void)
 }
 
 void led_task(void) {
-  static uint32_t timer = 0;
-  static bool led_on = false;
-  const uint32_t interval = 500;
+  enum {
+    LED_BREATH_PERIOD_MS = 2000,
+    LED_BREATH_HALF_MS = LED_BREATH_PERIOD_MS / 2,
+    LED_PWM_STEPS = 8,
+    LED_BREATH_PEAK = LED_BREATH_HALF_MS - 1
+  };
+
+  static uint32_t last_tick = 0;
+  static uint32_t breath_time = 0;
+  static uint8_t pwm_phase = 0;
+  static uint8_t duty = 0;
   uint32_t now = board_millis();
-  if (now - timer >= interval) {
-    timer = now;
-    led_on = !led_on;
-    GPIO_WriteBit(GPIOA, GPIO_Pin_5, led_on ? Bit_SET : Bit_RESET);
-    GPIO_WriteBit(GPIOA, GPIO_Pin_8, led_on ? Bit_SET : Bit_RESET);
+
+  while ((uint32_t)(now - last_tick) >= 1) {
+    uint32_t ramp;
+    uint32_t brightness;
+
+    last_tick++;
+    breath_time++;
+    pwm_phase = (pwm_phase + 1) % LED_PWM_STEPS;
+
+    if (breath_time >= LED_BREATH_PERIOD_MS) {
+      breath_time = 0;
+    }
+
+    ramp = (breath_time < LED_BREATH_HALF_MS) ? breath_time : (LED_BREATH_PERIOD_MS - 1 - breath_time);
+
+    // Quadratic mapping makes the fade linger near dark/bright edges instead of looking linear.
+    brightness = ramp * ramp * LED_PWM_STEPS;
+    duty = (uint8_t)(brightness / (LED_BREATH_PEAK * LED_BREATH_PEAK));
+  }
+
+  {
+    BitAction state = (duty > pwm_phase) ? Bit_SET : Bit_RESET;
+    GPIO_WriteBit(GPIOA, GPIO_Pin_5, state);
+    GPIO_WriteBit(GPIOA, GPIO_Pin_8, state);
   }
 }
 
