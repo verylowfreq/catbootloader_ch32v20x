@@ -263,14 +263,14 @@ int main(void)
   {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
     GPIO_InitTypeDef init = {
-      .GPIO_Pin = GPIO_Pin_5,
+      .GPIO_Pin = GPIO_Pin_5 | GPIO_Pin_8,
       .GPIO_Mode = GPIO_Mode_Out_PP,
       .GPIO_Speed = GPIO_Speed_50MHz
     };
     GPIO_Init(GPIOA, &init);
   }
   GPIO_WriteBit(GPIOA, GPIO_Pin_5, Bit_SET);
-
+  GPIO_WriteBit(GPIOA, GPIO_Pin_8, Bit_SET);
 
   dump_rom(0x00004000, 1024);
 
@@ -339,6 +339,7 @@ void led_task(void) {
     timer = now;
     led_on = !led_on;
     GPIO_WriteBit(GPIOA, GPIO_Pin_5, led_on ? Bit_SET : Bit_RESET);
+    GPIO_WriteBit(GPIOA, GPIO_Pin_8, led_on ? Bit_SET : Bit_RESET);
   }
 }
 
@@ -558,33 +559,33 @@ void tud_vendor_rx_cb(uint8_t idx, const uint8_t *buffer, uint32_t bufsize) {
 // USB HID
 //--------------------------------------------------------------------+
 
-// Invoked when received GET_REPORT control request
-// Application must fill buffer report's content and return its length.
-// Return zero will cause the stack to STALL request
-uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen)
-{
-  (void) itf;
-  (void) report_id;
-  (void) report_type;
-  (void) buffer;
-  (void) reqlen;
+// // Invoked when received GET_REPORT control request
+// // Application must fill buffer report's content and return its length.
+// // Return zero will cause the stack to STALL request
+// uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen)
+// {
+//   (void) itf;
+//   (void) report_id;
+//   (void) report_type;
+//   (void) buffer;
+//   (void) reqlen;
 
-  return 0;
-}
+//   return 0;
+// }
 
-// Invoked when received SET_REPORT control request or
-// received data on OUT endpoint ( Report ID = 0, Type = 0 )
-void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize)
-{
-  // This example doesn't use multiple report and report ID
-  (void) itf;
-  (void) report_id;
-  (void) report_type;
-  (void) buffer;
-  (void) bufsize;
+// // Invoked when received SET_REPORT control request or
+// // received data on OUT endpoint ( Report ID = 0, Type = 0 )
+// void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize)
+// {
+//   // This example doesn't use multiple report and report ID
+//   (void) itf;
+//   (void) report_id;
+//   (void) report_type;
+//   (void) buffer;
+//   (void) bufsize;
 
-  const uint8_t* response_data = execute_command(buffer);
-  if (response_data != NULL) {
-    tud_hid_report(0x00, response_data, 64);
-  }
-}
+//   const uint8_t* response_data = execute_command(buffer);
+//   if (response_data != NULL) {
+//     tud_hid_report(0x00, response_data, 64);
+//   }
+// }

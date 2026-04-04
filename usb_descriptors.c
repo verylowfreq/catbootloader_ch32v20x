@@ -79,19 +79,19 @@ uint8_t const * tud_descriptor_device_cb(void)
 // HID Report Descriptor
 //--------------------------------------------------------------------+
 
-uint8_t const desc_hid_report[] =
-{
-  TUD_HID_REPORT_DESC_GENERIC_INOUT(CFG_TUD_HID_EP_BUFSIZE)
-};
+// uint8_t const desc_hid_report[] =
+// {
+//   TUD_HID_REPORT_DESC_GENERIC_INOUT(CFG_TUD_HID_EP_BUFSIZE)
+// };
 
-// Invoked when received GET HID REPORT DESCRIPTOR
-// Application return pointer to descriptor
-// Descriptor contents must exist long enough for transfer to complete
-uint8_t const * tud_hid_descriptor_report_cb(uint8_t itf)
-{
-  (void) itf;
-  return desc_hid_report;
-}
+// // Invoked when received GET HID REPORT DESCRIPTOR
+// // Application return pointer to descriptor
+// // Descriptor contents must exist long enough for transfer to complete
+// uint8_t const * tud_hid_descriptor_report_cb(uint8_t itf)
+// {
+//   (void) itf;
+//   return desc_hid_report;
+// }
 
 //--------------------------------------------------------------------+
 // Configuration Descriptor
@@ -99,25 +99,25 @@ uint8_t const * tud_hid_descriptor_report_cb(uint8_t itf)
 
 enum
 {
-  ITF_NUM_HID,
+  // ITF_NUM_HID,
   ITF_NUM_VENDOR,
   ITF_NUM_TOTAL
 };
 
-#define  CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_HID_INOUT_DESC_LEN + TUD_VENDOR_DESC_LEN)
+#define  CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + /* TUD_HID_INOUT_DESC_LEN + */ TUD_VENDOR_DESC_LEN)
 
-#define EPNUM_HID   0x01
+// #define EPNUM_HID   0x01
 
-#define EPNUM_VENDOR_OUT  0x02
-#define EPNUM_VENDOR_IN   0x82
+#define EPNUM_VENDOR_OUT  0x01
+#define EPNUM_VENDOR_IN   0x81
 
 uint8_t const desc_configuration[] =
 {
   // Config number, interface count, string index, total length, attribute, power in mA
   TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, 0x00, 100),
 
-  // Interface number, string index, protocol, report descriptor len, EP Out & In address, size & polling interval
-  TUD_HID_INOUT_DESCRIPTOR(ITF_NUM_HID, 4, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID, 0x80 | EPNUM_HID, CFG_TUD_HID_EP_BUFSIZE, 10),
+  // // Interface number, string index, protocol, report descriptor len, EP Out & In address, size & polling interval
+  // TUD_HID_INOUT_DESCRIPTOR(ITF_NUM_HID, 4, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID, 0x80 | EPNUM_HID, CFG_TUD_HID_EP_BUFSIZE, 10),
 
   // Interface number, string index, EP Out & IN address, EP size
   TUD_VENDOR_DESCRIPTOR(ITF_NUM_VENDOR, 5, EPNUM_VENDOR_OUT, 0x80 | EPNUM_VENDOR_IN, 64)
@@ -151,10 +151,10 @@ static char const *string_desc_arr[] =
 {
   (const char[]) { 0x09, 0x04 }, // 0: is supported language is English (0x0409)
   "WCH",                     // 1: Manufacturer
-  "HID Bootloader",              // 2: Product
+  "CAT Bootloader",              // 2: Product
   NULL,                          // 3: Serials will use unique ID if possible
   "HID Bootloader",
-  "USB Bootloader"
+  "CAT Bootloader"
 };
 
 

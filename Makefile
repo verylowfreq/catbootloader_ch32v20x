@@ -28,8 +28,7 @@ SRCS += ${TUSB_BASE}/hw/mcu/wch/ch32v20x/EVT/EXAM/SRC/Peripheral/src/ch32v20x_fl
 
 STARTUP_SRCS := startup_ch32v20x_D6.S
 
-TUSB_SRCS=tinyusb/src/class/hid/hid_device.c \
-		  tinyusb/src/class/vendor/vendor_device.c \
+TUSB_SRCS=tinyusb/src/class/vendor/vendor_device.c \
 		  tinyusb/src/common/tusb_fifo.c \
 		  tinyusb/src/device/usbd.c \
 		  tinyusb/src/device/usbd_control.c \
@@ -43,10 +42,15 @@ SRCS += ${TUSB_SRCS}
 OBJS := $(SRCS:.c=.o)
 OBJS += $(STARTUP_SRCS:.S=.o)
 
-hidbootloader.bin: hidbootloader.elf
+all: catbootloader.bin catbootloader.hex
+
+catbootloader.bin: catbootloader.elf
 	riscv-none-elf-objcopy -O binary $< $@
 
-hidbootloader.elf: $(OBJS)
+catbootloader.hex: catbootloader.elf
+	riscv-none-elf-objcopy -O ihex $< $@
+
+catbootloader.elf: $(OBJS)
 	$(CC) $(CFLAGS) $^ -o $@
 	riscv-none-elf-size $@
 
@@ -57,4 +61,4 @@ hidbootloader.elf: $(OBJS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f hidbootloader.elf hidbootloader.bin $(OBJS) 
+	rm -f catbootloader.elf catbootloader.bin  catbootloader.hex $(OBJS) 
