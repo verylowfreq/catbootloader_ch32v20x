@@ -105,13 +105,6 @@ uint8_t program_buffer[4096];
 #define BOOT_MAGIC_BOOTLOADER           0x624c
 
 
-static void jump_to_addr(uint32_t addr) {
-  __asm__ volatile(
-    "jalr zero, %0, 0\n"
-    :: "r"(addr)
-  );
-}
-
 void put_hex(uint8_t val) {
 #ifdef USE_PRINTS
   const char* chs = "0123456789abcdef";
@@ -159,84 +152,10 @@ bool enter_application(void) {
     return false;
   }
 
-    BKP_WriteBackupRegister(BKP_DR10, BOOT_MAGIC_APP_IMMEDIATELY);
+  BKP_WriteBackupRegister(BKP_DR10, BOOT_MAGIC_APP_IMMEDIATELY);
   NVIC_SystemReset();
 
   while (1) {}
-
-  {
-    const uint32_t* ptr = (const uint32_t*)0x00004000;
-
-    if (*ptr == 0xe339e339UL) {
-      // It seems that the flash is not programed.
-      // _PUTS("Not programmed.");
-      return false;
-    }
-  }
-
-  /* HSI ON */
-  RCC->CTLR |= RCC_HSION;
-  while ((RCC->CTLR & RCC_HSIRDY) == 0);
-
-  /* SYSCLK = HSI */
-  RCC->CFGR0 &= ~RCC_SW;
-  while ((RCC->CFGR0 & RCC_SWS) != RCC_SWS_HSI);
-
-  /* PLL OFF */
-  RCC->CTLR &= ~RCC_PLLON;
-  while (RCC->CTLR & RCC_PLLRDY);
-
-  /* HSE OFF */
-  RCC->CTLR &= ~RCC_HSEON;
-
-  /* 分周を既定値に */
-  RCC->CFGR0 &= ~(RCC_HPRE | RCC_PPRE1 | RCC_PPRE2);
-
-
-  BKP_WriteBackupRegister(BKP_DR10, 0x0000);
-
-  // _PUTS("Disable peripherals");
-  PWR_BackupAccessCmd(DISABLE);
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, DISABLE);
-  NVIC_DisableIRQ(USB_LP_CAN1_RX0_IRQn);
-  NVIC_DisableIRQ(USB_HP_CAN1_TX_IRQn);
-  NVIC_DisableIRQ(USBFS_IRQn);
-  RCC_AHBPeriphClockCmd(RCC_AHBPeriph_USBFS, DISABLE);
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, DISABLE);
-
-  SysTick->CTLR = 0x00;
-  SysTick->SR = 0;
-  SysTick->CMP = 0;
-  SysTick->CNT = 0;
-
-
-  // _PUTS("Disable IRQ");
-  __disable_irq();
-
-  // WORKAROUND: Crash on accessing mstatus
-  // uint32_t mstatus = __get_MSTATUS();
-  // mstatus &= ~0x08;
-  // __set_MSTATUS(mstatus);
-
-  PFIC->IENR[0] = 0;
-  PFIC->IENR[1] = 0;
-  PFIC->IENR[2] = 0;
-  PFIC->IENR[3] = 0;
-  PFIC->IPRR[0] = 0xffffffff;
-  PFIC->IPRR[1] = 0xffffffff;
-  PFIC->IPRR[2] = 0xffffffff;
-  PFIC->IPRR[3] = 0xffffffff;
-  PFIC->IRER[0] = 0xffffffff;
-  PFIC->IRER[1] = 0xffffffff;
-  PFIC->IRER[2] = 0xffffffff;
-  PFIC->IRER[3] = 0xffffffff;
-
-  GPIO_WriteBit(GPIOA, GPIO_Pin_5, Bit_RESET);
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, DISABLE);
-
-  jump_to_addr(0x00004000);
-
-  while (1) { }
 }
 
 void led_task(void);
@@ -244,13 +163,10 @@ void led_task(void);
 /*------------- MAIN -------------*/
 int main(void)
 {
-  if (!(RCC->RSTSCKR & RCC_PINRSTF)) {
-    enter_application();
-  }
-
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
   PWR_BackupAccessCmd(ENABLE);
   uint16_t magic = BKP_ReadBackupRegister(BKP_DR10);
+
   if (magic == BOOT_MAGIC_APP_IMMEDIATELY) {
     _PUTS("BOOT_MAGIC_APP");
     enter_application();
@@ -274,19 +190,12 @@ int main(void)
 
   dump_rom(0x00004000, 1024);
 
-
-  if (magic == BOOT_MAGIC_APP_IMMEDIATELY) {
-    _PUTS("BOOT_MAGIC_APP");
-    enter_application();
-
-  } else if (magic == BOOT_MAGIC_BOOTLOADER) {
+  if (magic == BOOT_MAGIC_BOOTLOADER) {
     // Continue bootloader
     _PUTS("BOOT_MAGIC_BOOTLOADER");
-
   } else {
-    // First reset
+    // First reset in the double-reset flow: arm the second reset and fall back to app.
     _PUTS("Write a magic for bootloader");
-
     BKP_WriteBackupRegister(BKP_DR10, BOOT_MAGIC_BOOTLOADER);
     _PUTS("Success.");
     SysTick->CTLR = 1 << 2;  // Clock source is HCLK.

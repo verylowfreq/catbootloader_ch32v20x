@@ -233,18 +233,8 @@ handle_reset:
     la a1, 0xe339e339
     beq a0, a1, _enter_bootloader
 
-    // Use Adafruit(?)-inspired boot entry, namely "double-reset in short succession to enter bootloader"
-    // 1. If the reset wasn't triggered by the nRST pin, go to application
-    // 2. On nRST, if not first reset, go to bootloader
-    // 3. On nRST, if *is* first reset, set magic and wait
-    // 4a. If wait times out, go to application
-    // 4b. If wait doesn't time out but a reset happens again, detect "not first" reset and go to bootloader
-    la a0, RCC_BASE
-    lw a1, (R32_RCC_RSTSCKR-RCC_BASE)(a0)
-    slli a1, a1, (31 - 26)
-    bgez a1, _bootloader_limit      // if PINRSTF == 0
-
     // Enable BKP and PWR clock
+    la a0, RCC_BASE
     lw a1, (R32_RCC_APB1PCENR-RCC_BASE)(a0)
     la a2, (1 << 27) | (1 << 28)
     or a1, a1, a2
@@ -262,6 +252,21 @@ handle_reset:
     beq a1, a2, _enter_application_code
     la a2, BOOT_MAGIC_BOOTLOADER
     beq a1, a2, _enter_bootloader
+
+    // Use Adafruit(?)-inspired boot entry, namely "double-reset in short succession to enter bootloader"
+    // 1. Explicit backup-register requests win regardless of reset source
+    // 2. If the reset wasn't triggered by the nRST pin, go to application
+    // 3. On nRST, if not first reset, go to bootloader
+    // 4. On nRST, if *is* first reset, set magic and wait
+    // 5a. If wait times out, go to application
+    // 5b. If wait doesn't time out but a reset happens again, detect "not first" reset and go to bootloader
+    la a0, RCC_BASE
+    lw a1, (R32_RCC_RSTSCKR-RCC_BASE)(a0)
+    li a2, (1 << 24)
+    or a4, a1, a2
+    sw a4, (R32_RCC_RSTSCKR-RCC_BASE)(a0)
+    slli a1, a1, (31 - 26)
+    bgez a1, _bootloader_limit      // if PINRSTF == 0
 
 
 _enter_bootloader:
