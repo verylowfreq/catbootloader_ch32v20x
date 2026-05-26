@@ -286,13 +286,13 @@ void led_task(void) {
 // Invoked when device is mounted
 void tud_mount_cb(void)
 {
-  
+
 }
 
 // Invoked when device is unmounted
 void tud_umount_cb(void)
 {
-  
+
 }
 
 // Invoked when usb bus is suspended
@@ -301,13 +301,13 @@ void tud_umount_cb(void)
 void tud_suspend_cb(bool remote_wakeup_en)
 {
   (void) remote_wakeup_en;
-  
+
 }
 
 // Invoked when usb bus is resumed
 void tud_resume_cb(void)
 {
-  
+
 }
 
 
@@ -433,8 +433,7 @@ extern uint8_t const desc_ms_os_20[];
 
 enum
 {
-  VENDOR_REQUEST_WEBUSB = 1,
-  VENDOR_REQUEST_MICROSOFT = 2
+  VENDOR_REQUEST_MICROSOFT = 1
 };
 
 // Invoked when a control transfer occurred on an interface of this class
