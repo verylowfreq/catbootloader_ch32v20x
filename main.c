@@ -68,7 +68,8 @@ typedef enum {
   CMD_FLUSH,
   CMD_READ,
   CMD_RESET,
-  CMD_CRC
+  CMD_CRC,
+  CMD_RESET_BOOTLOADER
 } Command_t;
 
 typedef enum {
@@ -405,6 +406,16 @@ const uint8_t* execute_command(const uint8_t* buffer) {
     return response_buffer;
 
   } else if (packet->command == CMD_RESET) {
+    NVIC_SystemReset();
+    while (1) { }
+
+  } else if (packet->command == CMD_RESET_BOOTLOADER) {
+    // Reset back into the bootloader rather than the application.
+    // main() turned backup-domain access off once it had read the magic, so
+    // it has to be re-enabled before arming the value the startup check reads.
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+    PWR_BackupAccessCmd(ENABLE);
+    BKP_WriteBackupRegister(BKP_DR10, BOOT_MAGIC_BOOTLOADER);
     NVIC_SystemReset();
     while (1) { }
 
