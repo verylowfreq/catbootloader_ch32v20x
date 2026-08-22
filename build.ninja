@@ -1,0 +1,90 @@
+# CH32V203 catbootloader build
+# Run `ninja` in this directory. The RISC-V toolchain must be in PATH.
+
+cc = riscv-none-elf-gcc
+objcopy = riscv-none-elf-objcopy
+
+archflags = -mabi=ilp32 -march=rv32imac_zicsr -mcmodel=medany
+cflags = $archflags -Os -Wall -ffat-lto-objects -flto -fdata-sections -ffunction-sections
+includes = -I. -Itinyusb -Itinyusb/src -Itinyusb/hw -Itinyusb/hw/bsp/ch32v20x/boards/ch32v203c_r0_1v0 -Itinyusb/hw/mcu/wch/ch32v20x/EVT/EXAM/SRC/Core -Itinyusb/hw/mcu/wch/ch32v20x/EVT/EXAM/SRC/Peripheral/inc
+ldflags = $archflags -Os -flto -nostartfiles --specs=nosys.specs --specs=nano.specs -Wl,-T,Link.ld -Wl,--defsym=__FLASH_SIZE=16K -Wl,--defsym=__RAM_SIZE=20K -Wl,-Map=firmware.elf.map -Wl,--cref -Wl,-gc-sections -Wl,--print-memory-usage
+
+rule cc
+  command = $cc $cflags $includes -MMD -MF $out.d -c $in -o $out
+  description = CC $in
+  depfile = $out.d
+  deps = gcc
+
+rule as
+  command = $cc $cflags $includes -MMD -MF $out.d -c $in -o $out
+  description = AS $in
+  depfile = $out.d
+  deps = gcc
+
+rule link
+  command = $cc $ldflags $in -o $out -lgcc -lm -lnosys
+  description = LINK $out
+
+rule bin
+  command = $objcopy -O binary $in $out
+  description = OBJCOPY BIN $out
+
+rule hex
+  command = $objcopy -O ihex $in $out
+  description = OBJCOPY HEX $out
+
+build main.o: cc main.c
+build family.o: cc tinyusb/hw/bsp/ch32v20x/family.c
+build usb_descriptors.o: cc usb_descriptors.c
+build system_ch32v20x.o: cc system_ch32v20x.c
+build board.o: cc tinyusb/hw/bsp/board.c
+
+build ch32v20x_flash.o: cc tinyusb/hw/mcu/wch/ch32v20x/EVT/EXAM/SRC/Peripheral/src/ch32v20x_flash.c
+build ch32v20x_bkp.o: cc tinyusb/hw/mcu/wch/ch32v20x/EVT/EXAM/SRC/Peripheral/src/ch32v20x_bkp.c
+build ch32v20x_pwr.o: cc tinyusb/hw/mcu/wch/ch32v20x/EVT/EXAM/SRC/Peripheral/src/ch32v20x_pwr.c
+build ch32v20x_gpio.o: cc tinyusb/hw/mcu/wch/ch32v20x/EVT/EXAM/SRC/Peripheral/src/ch32v20x_gpio.c
+build ch32v20x_rcc.o: cc tinyusb/hw/mcu/wch/ch32v20x/EVT/EXAM/SRC/Peripheral/src/ch32v20x_rcc.c
+build ch32v20x_usart.o: cc tinyusb/hw/mcu/wch/ch32v20x/EVT/EXAM/SRC/Peripheral/src/ch32v20x_usart.c
+
+build vendor_device.o: cc tinyusb/src/class/vendor/vendor_device.c
+build tusb_fifo.o: cc tinyusb/src/common/tusb_fifo.c
+build usbd.o: cc tinyusb/src/device/usbd.c
+build usbd_control.o: cc tinyusb/src/device/usbd_control.c
+build fsdev_common.o: cc tinyusb/src/portable/st/stm32_fsdev/fsdev_common.c
+build dcd_stm32_fsdev.o: cc tinyusb/src/portable/st/stm32_fsdev/dcd_stm32_fsdev.c
+build dcd_ch32_usbfs.o: cc tinyusb/src/portable/wch/dcd_ch32_usbfs.c
+build dcd_ch32_usbhs.o: cc tinyusb/src/portable/wch/dcd_ch32_usbhs.c
+build tusb.o: cc tinyusb/src/tusb.c
+
+build startup_ch32v20x_D6.o: as startup_ch32v20x_D6.S
+
+build catbootloader.elf: link $
+  main.o $
+  family.o $
+  usb_descriptors.o $
+  system_ch32v20x.o $
+  board.o $
+  ch32v20x_flash.o $
+  ch32v20x_bkp.o $
+  ch32v20x_pwr.o $
+  ch32v20x_gpio.o $
+  ch32v20x_rcc.o $
+  ch32v20x_usart.o $
+  vendor_device.o $
+  tusb_fifo.o $
+  usbd.o $
+  usbd_control.o $
+  fsdev_common.o $
+  dcd_stm32_fsdev.o $
+  dcd_ch32_usbfs.o $
+  dcd_ch32_usbhs.o $
+  tusb.o $
+  startup_ch32v20x_D6.o $
+  | Link.ld
+
+build catbootloader.bin: bin catbootloader.elf
+build catbootloader.hex: hex catbootloader.elf
+
+build all: phony catbootloader.bin catbootloader.hex
+
+default all

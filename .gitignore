@@ -1,4 +1,9 @@
 *.o
+*.d
 *.bin
 *.elf
+*.hex
 *.elf.map
+
+.ninja_deps
+.ninja_log
